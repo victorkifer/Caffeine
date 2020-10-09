@@ -27,12 +27,11 @@ class CaffeineTileService : TileService(), Loggable, Caffeine.TimerListener {
 
     private inner class ScreenOnOffReceiver : BroadcastReceiver(), Loggable {
         override fun onReceive(context: Context, intent: Intent) {
-            if (intent.action != Intent.ACTION_SCREEN_OFF)
-                return
-            info("Received ${Intent.ACTION_SCREEN_OFF}, intent: $intent")
             if (intent.action == Intent.ACTION_SCREEN_ON) {
+                info("Received ${Intent.ACTION_SCREEN_ON}, intent: $intent")
                 updateTile()
-            } else {
+            } else if (intent.action == Intent.ACTION_SCREEN_OFF) {
+                info("Received ${Intent.ACTION_SCREEN_OFF}, intent: $intent")
                 updateTile(state = Tile.STATE_UNAVAILABLE)
                 Caffeine.onReset()
             }

@@ -36,16 +36,17 @@ class TimerService : Service(), Loggable, Caffeine.ModeListener, Caffeine.TimerL
     @RequiresApi(Build.VERSION_CODES.O)
     private fun createNotificationChannel() {
         if (notificationManager.notificationChannels.any { it.id == NOTIFICATION_CHANNEL_ID }) {
-            return
+            notificationManager.deleteNotificationChannel(NOTIFICATION_CHANNEL_ID)
         }
 
         val channel = NotificationChannel(
                 NOTIFICATION_CHANNEL_ID,
                 getString(R.string.notif_channel),
-                NotificationManager.IMPORTANCE_DEFAULT
+                NotificationManager.IMPORTANCE_LOW
         )
         channel.enableLights(false)
         channel.enableVibration(false)
+        channel.setSound(null, null)
         notificationManager.createNotificationChannel(channel)
     }
 
