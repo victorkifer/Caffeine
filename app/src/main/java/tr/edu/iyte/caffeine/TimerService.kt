@@ -4,122 +4,92 @@ import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.Service
-import android.content.BroadcastReceiver
-import android.content.Context
 import android.content.Intent
-import android.content.IntentFilter
-import android.os.Binder
-import android.os.CountDownTimer
+import android.os.Build
 import android.os.PowerManager
 import android.telephony.PhoneStateListener
 import android.telephony.TelephonyManager
+import androidx.annotation.RequiresApi
 import androidx.core.app.NotificationCompat
 import tr.edu.iyte.caffeine.util.*
 
-class TimerService : Service(), Loggable {
-    inner class TimerServiceProxy : Binder() {
-        fun get() = this@TimerService
+class TimerService : Service(), Loggable, Caffeine.ModeListener, Caffeine.TimerListener {
+    companion object {
+        var isCaffeineRunning: Boolean = false
+            private set
     }
 
-    override fun onBind(intent: Intent?) = TimerServiceProxy()
+    override fun onBind(intent: Intent?) = null
 
-    interface TimerListener {
-        fun onTick(label: String, percentage: Float)
-        fun onFinish()
-    }
-
-    private inner class Timer(private val secs: Long) :
-            CountDownTimer(secs.toMillis() + 300, 500) {
-        override fun onTick(millisUntilFinished: Long) {
-            val sec = (millisUntilFinished / 1000).toInt()
-            val min = sec / 60
-            val percentage = sec / secs.toFloat()
-
-            if (secs >= Int.MAX_VALUE)
-                return
-            listener?.onTick(String.format("%d:%02d", min, sec % 60), percentage)
-        }
-
-        override fun onFinish() {
-            onReset()
-            listener?.onFinish()
-        }
-    }
-
-    private inner class ScreenOffReceiver : BroadcastReceiver(), Loggable {
-        override fun onReceive(context: Context, intent: Intent) {
-            if (intent.action != Intent.ACTION_SCREEN_OFF)
-                return
-            info("Received ${Intent.ACTION_SCREEN_OFF}, intent: $intent")
-            onReset()
-        }
-    }
-
-    var listener: TimerListener? = null
+    val caffeine = Caffeine
 
     private var wakelock: PowerManager.WakeLock? = null
-    private var mode = CaffeineMode.INACTIVE
-    private var currentTimer: Timer? = null
 
-    private val screenOffReceiver = ScreenOffReceiver()
     private val callListener = object : PhoneStateListener() {
         override fun onCallStateChanged(state: Int, incomingNumber: String?) {
             super.onCallStateChanged(state, incomingNumber)
             if (state == TelephonyManager.CALL_STATE_OFFHOOK)
-                onReset()
+                caffeine.onReset()
         }
+    }
+
+    @RequiresApi(Build.VERSION_CODES.O)
+    private fun createNotificationChannel() {
+        if (notificationManager.notificationChannels.any { it.id == NOTIFICATION_CHANNEL_ID }) {
+            return
+        }
+
+        val channel = NotificationChannel(
+                NOTIFICATION_CHANNEL_ID,
+                getString(R.string.notif_channel),
+                NotificationManager.IMPORTANCE_DEFAULT
+        )
+        channel.enableLights(false)
+        channel.enableVibration(false)
+        notificationManager.createNotificationChannel(channel)
     }
 
     override fun onCreate() {
         super.onCreate()
+        info("Service onCreate")
         doIfAndroidO {
-            notificationManager.createNotificationChannel(
-                    NotificationChannel(NOTIFICATION_CHANNEL_ID,
-                            getString(R.string.notif_channel),
-                            NotificationManager.IMPORTANCE_HIGH))
+            createNotificationChannel()
+            sendNotification(getString(R.string.notif_running))
+        }
+
+        caffeine.modeListener = this
+        caffeine.addTimerListener(this)
+    }
+
+    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        info("Service onStartCommand")
+        caffeine.onModeChange()
+        return START_NOT_STICKY
+    }
+
+    private fun sendNotification(title: String) {
+        doIfAndroidO {
             val notif = NotificationCompat.Builder(this, NOTIFICATION_CHANNEL_ID)
                     .setOnlyAlertOnce(true)
                     .setSmallIcon(R.drawable.ic_caffeine_full)
-                    .setContentTitle(getString(R.string.notif_running))
+                    .setContentTitle(title)
                     .setOngoing(true)
+                    .setPriority(NotificationCompat.PRIORITY_LOW)
                     .setCategory(Notification.CATEGORY_SERVICE)
+                    .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
                     .build()
             startForeground(85, notif)
         }
     }
 
-    fun onModeChange() {
-        when (mode) {
-            CaffeineMode.INFINITE_MINS -> {
-                onReset()
-                listener?.onFinish()
-            }
-            else -> {
-                mode = mode.next()
-                currentTimer?.cancel()
-                currentTimer = Timer(mode.min.toSeconds())
-
-                acquireWakelock(mode.min.toSeconds())
-                registerInterruptionListeners()
-
-                listener?.onTick(mode.label, 1f)
-                currentTimer?.start()
-                isCaffeineRunning = true
-            }
-        }
-    }
-
-    fun onReset() {
-        mode = CaffeineMode.INACTIVE
-        unregisterInterruptionListeners()
-        releaseWakelock()
-        currentTimer?.cancel()
-        currentTimer = null
-        isCaffeineRunning = false
-    }
-
     override fun onDestroy() {
         super.onDestroy()
+        info("Service onDestroy")
+        caffeine.removeTimerListener(this)
+        caffeine.modeListener = null
+        releaseWakelock()
+        unregisterInterruptionListeners()
+        isCaffeineRunning = false
         doIfAndroidO {
             stopForeground(true)
         }
@@ -127,7 +97,6 @@ class TimerService : Service(), Loggable {
 
     private fun registerInterruptionListeners() {
         if (!isCaffeineRunning) {
-            registerReceiver(screenOffReceiver, IntentFilter(Intent.ACTION_SCREEN_OFF))
             telephonyManager.listen(callListener, PhoneStateListener.LISTEN_CALL_STATE)
             info("Screen off receiver and call listener registered")
         }
@@ -135,7 +104,6 @@ class TimerService : Service(), Loggable {
 
     private fun unregisterInterruptionListeners() {
         if (isCaffeineRunning) {
-            unregisterReceiver(screenOffReceiver)
             telephonyManager.listen(callListener, PhoneStateListener.LISTEN_NONE)
             info("Screen off receiver and call listener unregistered")
         }
@@ -145,7 +113,7 @@ class TimerService : Service(), Loggable {
     private fun acquireWakelock(secs: Long) {
         releaseWakelock()
 
-        info("Acquiring wakelock..")
+        info("Acquiring wakelock for $secs seconds...")
         wakelock = powerManager.newWakeLock(PowerManager.SCREEN_BRIGHT_WAKE_LOCK, WAKE_LOCK_TAG)
         wakelock?.acquire(secs.toMillis())
     }
@@ -156,5 +124,29 @@ class TimerService : Service(), Loggable {
         info("Releasing wakelock..")
         wakelock?.release()
         wakelock = null
+    }
+
+    override fun onModeChanged(mode: CaffeineMode) {
+        when (mode) {
+            CaffeineMode.INACTIVE -> {
+                unregisterInterruptionListeners()
+                releaseWakelock()
+                isCaffeineRunning = false
+                stopSelf()
+            }
+            else -> {
+                acquireWakelock(mode.min.toSeconds())
+                registerInterruptionListeners()
+                isCaffeineRunning = true
+            }
+        }
+    }
+
+    override fun onTick(label: String, percentage: Float) {
+        sendNotification(label)
+    }
+
+    override fun onFinish() {
+        // does nothing
     }
 }

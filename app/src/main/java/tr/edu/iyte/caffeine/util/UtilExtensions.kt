@@ -20,12 +20,6 @@ val Context.telephonyManager: TelephonyManager
 val Context.notificationManager: NotificationManager
     get() = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
 
-var Context.isCaffeineRunning: Boolean
-    get() = getSharedPreferences("caffeine_pref", Context.MODE_PRIVATE)
-            .getBoolean("caffeine_run", false)
-    set(value) = getSharedPreferences("caffeine_pref", Context.MODE_PRIVATE)
-            .edit().putBoolean("caffeine_run", value).apply()
-
 inline fun <reified T : Context> Context.intent(): Intent =
         Intent(this, T::class.java)
 

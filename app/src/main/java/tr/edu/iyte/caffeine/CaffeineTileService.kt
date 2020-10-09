@@ -1,46 +1,50 @@
 package tr.edu.iyte.caffeine
 
-import android.content.ComponentName
-import android.content.ServiceConnection
+import android.content.BroadcastReceiver
+import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
 import android.graphics.drawable.Icon
-import android.os.IBinder
 import android.service.quicksettings.Tile
 import android.service.quicksettings.TileService
-import tr.edu.iyte.caffeine.util.*
+import tr.edu.iyte.caffeine.util.Loggable
+import tr.edu.iyte.caffeine.util.info
+import tr.edu.iyte.caffeine.util.startForegroundService
+import tr.edu.iyte.caffeine.util.stopService
 
-class CaffeineTileService : TileService(), Loggable, TimerService.TimerListener {
+class CaffeineTileService : TileService(), Loggable, Caffeine.TimerListener {
     private val icCaffeineEmpty by lazy { Icon.createWithResource(this, R.drawable.ic_caffeine_empty) }
     private val icCaffeineFull by lazy { Icon.createWithResource(this, R.drawable.ic_caffeine_full) }
     private val icCaffeine66percent by lazy { Icon.createWithResource(this, R.drawable.ic_caffeine_66percent) }
     private val icCaffeine33percent by lazy { Icon.createWithResource(this, R.drawable.ic_caffeine_33percent) }
 
-    private var isRemovingTile = false
-
-    private var timerService: TimerService? = null
-    private val timerServiceConnection = object : ServiceConnection {
-        override fun onServiceConnected(cn: ComponentName?, binder: IBinder?) {
-            timerService = (binder as TimerService.TimerServiceProxy).get()
-            timerService?.listener = this@CaffeineTileService
-
-            if (isRemovingTile) {
-                timerService?.onReset()
-                stopService<TimerService>()
-            }
-        }
-
-        override fun onServiceDisconnected(cn: ComponentName?) {}
-    }
+    private val screenOnOffReceiver = ScreenOnOffReceiver()
 
     override fun onTileAdded() {
         super.onTileAdded()
-        isCaffeineRunning = false
-        isRemovingTile = false
         info("tile added")
+    }
+
+    private inner class ScreenOnOffReceiver : BroadcastReceiver(), Loggable {
+        override fun onReceive(context: Context, intent: Intent) {
+            if (intent.action != Intent.ACTION_SCREEN_OFF)
+                return
+            info("Received ${Intent.ACTION_SCREEN_OFF}, intent: $intent")
+            if (intent.action == Intent.ACTION_SCREEN_ON) {
+                updateTile()
+            } else {
+                updateTile(state = Tile.STATE_UNAVAILABLE)
+                Caffeine.onReset()
+            }
+        }
     }
 
     override fun onStartListening() {
         super.onStartListening()
         info("started listening")
+
+        registerReceiver(screenOnOffReceiver, IntentFilter(Intent.ACTION_SCREEN_OFF))
+        registerReceiver(screenOnOffReceiver, IntentFilter(Intent.ACTION_SCREEN_ON))
 
         if (isLocked) {
             info("phone is locked, caffeine won't operate")
@@ -48,34 +52,27 @@ class CaffeineTileService : TileService(), Loggable, TimerService.TimerListener 
             return
         }
 
-        if (!startForegroundService<TimerService>()
-                || !applicationContext.bindService(intent<TimerService>(), timerServiceConnection, 0))
-            updateTile(state = Tile.STATE_UNAVAILABLE)
-        else if (!isCaffeineRunning)
-            updateTile()
+        updateTile()
+        Caffeine.addTimerListener(this)
     }
 
     override fun onClick() {
         super.onClick()
-        timerService?.onModeChange()
+        info("tile clicked")
+        startForegroundService<TimerService>()
     }
 
     override fun onStopListening() {
-        if (timerService != null) {
-            timerService?.listener = null
-            applicationContext.unbindService(timerServiceConnection)
-            timerService = null
-        }
+        unregisterReceiver(screenOnOffReceiver)
+        Caffeine.removeTimerListener(this)
         info("stopped listening")
         super.onStopListening()
     }
 
     override fun onTileRemoved() {
         info("tile removed")
-        if (isCaffeineRunning) {
-            isRemovingTile = true
-            applicationContext.bindService(intent<TimerService>(), timerServiceConnection, 0)
-        }
+        Caffeine.onReset()
+        stopService<TimerService>()
         super.onTileRemoved()
     }
 
