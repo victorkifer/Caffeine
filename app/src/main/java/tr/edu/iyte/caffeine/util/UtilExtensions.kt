@@ -26,16 +26,16 @@ var Context.isCaffeineRunning: Boolean
     set(value) = getSharedPreferences("caffeine_pref", Context.MODE_PRIVATE)
             .edit().putBoolean("caffeine_run", value).apply()
 
-inline fun <reified T: Context> Context.intent(): Intent =
+inline fun <reified T : Context> Context.intent(): Intent =
         Intent(this, T::class.java)
 
-inline fun <reified T: Service> Context.startService() =
+inline fun <reified T : Service> Context.startService() =
         startService(intent<T>()) != null
 
-inline fun <reified T: Service> Context.stopService() =
+inline fun <reified T : Service> Context.stopService() =
         stopService(intent<T>())
 
 inline fun doIfAndroidO(task: () -> Unit) {
-    if(Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
         task()
 }

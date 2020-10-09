@@ -22,7 +22,7 @@ class CaffeineTileService : TileService(), Loggable, TimerService.TimerListener 
             timerService = (binder as TimerService.TimerServiceProxy).get()
             timerService?.listener = this@CaffeineTileService
 
-            if(isRemovingTile) {
+            if (isRemovingTile) {
                 timerService?.onReset()
                 stopService<TimerService>()
             }
@@ -42,16 +42,16 @@ class CaffeineTileService : TileService(), Loggable, TimerService.TimerListener 
         super.onStartListening()
         info("started listening")
 
-        if(isLocked) {
+        if (isLocked) {
             info("phone is locked, caffeine won't operate")
             updateTile(state = Tile.STATE_UNAVAILABLE)
             return
         }
 
-        if(!startService<TimerService>()
-            || !applicationContext.bindService(intent<TimerService>(), timerServiceConnection, 0))
+        if (!startService<TimerService>()
+                || !applicationContext.bindService(intent<TimerService>(), timerServiceConnection, 0))
             updateTile(state = Tile.STATE_UNAVAILABLE)
-        else if(!isCaffeineRunning)
+        else if (!isCaffeineRunning)
             updateTile()
     }
 
@@ -61,7 +61,7 @@ class CaffeineTileService : TileService(), Loggable, TimerService.TimerListener 
     }
 
     override fun onStopListening() {
-        if(timerService != null) {
+        if (timerService != null) {
             timerService?.listener = null
             applicationContext.unbindService(timerServiceConnection)
             timerService = null
@@ -72,7 +72,7 @@ class CaffeineTileService : TileService(), Loggable, TimerService.TimerListener 
 
     override fun onTileRemoved() {
         info("tile removed")
-        if(isCaffeineRunning) {
+        if (isCaffeineRunning) {
             isRemovingTile = true
             applicationContext.bindService(intent<TimerService>(), timerServiceConnection, 0)
         }
@@ -85,7 +85,7 @@ class CaffeineTileService : TileService(), Loggable, TimerService.TimerListener 
                 icon = when {
                     percentage > .66 -> icCaffeineFull
                     percentage > .33 -> icCaffeine66percent
-                    else             -> icCaffeine33percent
+                    else -> icCaffeine33percent
                 })
     }
 

@@ -17,7 +17,10 @@ import androidx.core.app.NotificationCompat
 import tr.edu.iyte.caffeine.util.*
 
 class TimerService : Service(), Loggable {
-    inner class TimerServiceProxy : Binder() { fun get() = this@TimerService }
+    inner class TimerServiceProxy : Binder() {
+        fun get() = this@TimerService
+    }
+
     override fun onBind(intent: Intent?) = TimerServiceProxy()
 
     interface TimerListener {
@@ -32,7 +35,7 @@ class TimerService : Service(), Loggable {
             val min = sec / 60
             val percentage = sec / secs.toFloat()
 
-            if(secs >= Int.MAX_VALUE)
+            if (secs >= Int.MAX_VALUE)
                 return
             listener?.onTick(String.format("%d:%02d", min, sec % 60), percentage)
         }
@@ -45,7 +48,7 @@ class TimerService : Service(), Loggable {
 
     private inner class ScreenOffReceiver : BroadcastReceiver(), Loggable {
         override fun onReceive(context: Context, intent: Intent) {
-            if(intent.action != Intent.ACTION_SCREEN_OFF)
+            if (intent.action != Intent.ACTION_SCREEN_OFF)
                 return
             info("Received ${Intent.ACTION_SCREEN_OFF}, intent: $intent")
             onReset()
@@ -62,20 +65,20 @@ class TimerService : Service(), Loggable {
     private val callListener = object : PhoneStateListener() {
         override fun onCallStateChanged(state: Int, incomingNumber: String?) {
             super.onCallStateChanged(state, incomingNumber)
-            if(state == TelephonyManager.CALL_STATE_OFFHOOK)
+            if (state == TelephonyManager.CALL_STATE_OFFHOOK)
                 onReset()
         }
     }
 
     fun onModeChange() {
-        when(mode) {
+        when (mode) {
             CaffeineMode.INFINITE_MINS -> {
                 onReset()
                 listener?.onFinish()
             }
-            else                       -> {
+            else -> {
                 doIfAndroidO {
-                    if(isCaffeineRunning)
+                    if (isCaffeineRunning)
                         return
 
                     notificationManager.createNotificationChannel(
@@ -120,7 +123,7 @@ class TimerService : Service(), Loggable {
     }
 
     private fun registerInterruptionListeners() {
-        if(!isCaffeineRunning) {
+        if (!isCaffeineRunning) {
             registerReceiver(screenOffReceiver, IntentFilter(Intent.ACTION_SCREEN_OFF))
             telephonyManager.listen(callListener, PhoneStateListener.LISTEN_CALL_STATE)
             info("Screen off receiver and call listener registered")
@@ -128,7 +131,7 @@ class TimerService : Service(), Loggable {
     }
 
     private fun unregisterInterruptionListeners() {
-        if(isCaffeineRunning) {
+        if (isCaffeineRunning) {
             unregisterReceiver(screenOffReceiver)
             telephonyManager.listen(callListener, PhoneStateListener.LISTEN_NONE)
             info("Screen off receiver and call listener unregistered")
@@ -145,7 +148,7 @@ class TimerService : Service(), Loggable {
     }
 
     private fun releaseWakelock() {
-        if(wakelock == null || !wakelock!!.isHeld)
+        if (wakelock == null || !wakelock!!.isHeld)
             return
         info("Releasing wakelock..")
         wakelock?.release()
