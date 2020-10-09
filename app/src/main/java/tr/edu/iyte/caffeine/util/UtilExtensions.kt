@@ -32,6 +32,13 @@ inline fun <reified T : Context> Context.intent(): Intent =
 inline fun <reified T : Service> Context.startService() =
         startService(intent<T>()) != null
 
+inline fun <reified T : Service> Context.startForegroundService() =
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            startForegroundService(intent<T>()) != null
+        } else {
+            startService(intent<T>()) != null
+        }
+
 inline fun <reified T : Service> Context.stopService() =
         stopService(intent<T>())
 

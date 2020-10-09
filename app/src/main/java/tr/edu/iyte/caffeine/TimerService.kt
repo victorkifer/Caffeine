@@ -70,6 +70,24 @@ class TimerService : Service(), Loggable {
         }
     }
 
+    override fun onCreate() {
+        super.onCreate()
+        doIfAndroidO {
+            notificationManager.createNotificationChannel(
+                    NotificationChannel(NOTIFICATION_CHANNEL_ID,
+                            getString(R.string.notif_channel),
+                            NotificationManager.IMPORTANCE_HIGH))
+            val notif = NotificationCompat.Builder(this, NOTIFICATION_CHANNEL_ID)
+                    .setOnlyAlertOnce(true)
+                    .setSmallIcon(R.drawable.ic_caffeine_full)
+                    .setContentTitle(getString(R.string.notif_running))
+                    .setOngoing(true)
+                    .setCategory(Notification.CATEGORY_SERVICE)
+                    .build()
+            startForeground(85, notif)
+        }
+    }
+
     fun onModeChange() {
         when (mode) {
             CaffeineMode.INFINITE_MINS -> {
@@ -77,24 +95,6 @@ class TimerService : Service(), Loggable {
                 listener?.onFinish()
             }
             else -> {
-                doIfAndroidO {
-                    if (isCaffeineRunning)
-                        return
-
-                    notificationManager.createNotificationChannel(
-                            NotificationChannel(NOTIFICATION_CHANNEL_ID,
-                                    getString(R.string.notif_channel),
-                                    NotificationManager.IMPORTANCE_HIGH))
-                    val notif = NotificationCompat.Builder(this, NOTIFICATION_CHANNEL_ID)
-                            .setOnlyAlertOnce(true)
-                            .setSmallIcon(R.drawable.ic_caffeine_full)
-                            .setContentTitle(getString(R.string.notif_running))
-                            .setOngoing(true)
-                            .setCategory(Notification.CATEGORY_SERVICE)
-                            .build()
-                    startForeground(85, notif)
-                }
-
                 mode = mode.next()
                 currentTimer?.cancel()
                 currentTimer = Timer(mode.min.toSeconds())
@@ -116,7 +116,10 @@ class TimerService : Service(), Loggable {
         currentTimer?.cancel()
         currentTimer = null
         isCaffeineRunning = false
+    }
 
+    override fun onDestroy() {
+        super.onDestroy()
         doIfAndroidO {
             stopForeground(true)
         }

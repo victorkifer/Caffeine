@@ -48,7 +48,7 @@ class CaffeineTileService : TileService(), Loggable, TimerService.TimerListener 
             return
         }
 
-        if (!startService<TimerService>()
+        if (!startForegroundService<TimerService>()
                 || !applicationContext.bindService(intent<TimerService>(), timerServiceConnection, 0))
             updateTile(state = Tile.STATE_UNAVAILABLE)
         else if (!isCaffeineRunning)
